@@ -1,38 +1,43 @@
 {
-  "name": "snippet-hub",
-  "version": "1.0.0",
-  "description": "",
+  "name": "snippet-box",
+  "version": "1.4.0",
+  "description": "Self-hosted code snippet manager",
   "main": "build/server.js",
-  "scripts": {
-    "init:client": "npm install --prefix=client",
-    "init:server": "npm install",
-    "init": "npm i && cd client && npm i",
-    "dev:client": "npm start --prefix=client",
-    "dev:server": "nodemon",
-    "dev": "npm-run-all -n --parallel dev:**",
-    "build:client": "npm run build --prefix=client",
-    "build:clear": "rm -rf build",
-    "build:tsc": "tsc",
-    "build": "npm-run-all -n build:**"
+  "engines": {
+    "node": "^22.23.4 || ^24.22.1 || >=26.12.1"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "scripts": {
+    "dev:client": "pnpm --filter snippet-box-client dev",
+    "dev:server": "tsx watch src/server.ts",
+    "dev": "concurrently -n server,client \"pnpm:dev:server\" \"pnpm:dev:client\"",
+    "build:client": "pnpm --filter snippet-box-client build",
+    "build:server": "tsc",
+    "build": "pnpm build:server && pnpm build:client && pnpm notices",
+    "start": "node build/server.js",
+    "notices": "pnpm licenses list --prod --json -r | node scripts/third-party-notices.mjs > THIRD_PARTY_NOTICES.txt",
+    "test": "tsx --test \"test/**/*.test.ts\" \"client/src/**/*.test.ts\""
+  },
+  "license": "MIT",
   "devDependencies": {
-    "@types/express": "^4.17.13",
-    "@types/node": "^16.9.2",
-    "@types/validator": "^13.6.3",
-    "nodemon": "^2.0.12",
-    "npm-run-all": "^4.1.5",
-    "ts-node": "^10.2.1",
-    "typescript": "^4.4.3"
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.6.6",
+    "@types/umzug": "^2.3.9",
+    "concurrently": "^10.0.6",
+    "tsx": "^4.23.15",
+    "typescript": "~5.9.3"
   },
   "dependencies": {
-    "@types/umzug": "^2.3.2",
-    "dotenv": "^10.0.0",
-    "express": "^4.17.1",
-    "sequelize": "^6.6.5",
-    "sqlite3": "^5.0.2",
-    "umzug": "^2.3.0"
+    "express": "^5.3.0",
+    "helmet": "^8.3.0",
+    "sequelize": "^6.37.8",
+    "sqlite3": "^6.0.1",
+    "umzug": "^2.3.0",
+    "zod": "^4.6.7"
+  },
+  "packageManager": "pnpm@12.16.1",
+  "author": "joe128 (fork of pawelmalak/snippet-box)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/joe128/snippet-box.git"
   }
 }

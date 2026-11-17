@@ -1,0 +1,120 @@
+{
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: ['config:recommended', ':semanticCommits', ':dependencyDashboard'],
+  timezone: 'Europe/Vienna',
+  schedule: ['before 6am on monday'],
+  labels: ['dependencies'],
+
+  // pnpm 12 rejects packages younger than 24h (minimumReleaseAge)
+  minimumReleaseAge: '3 days',
+  internalChecksFilter: 'strict',
+
+  packageRules: [
+    {
+      description: 'CI only -> no release',
+      matchManagers: ['github-actions'],
+      groupName: 'All GitHub Actions',
+      groupSlug: 'github-actions-all',
+      matchUpdateTypes: ['major', 'minor', 'patch', 'pin', 'digest'],
+      semanticCommitType: 'chore',
+      semanticCommitScope: 'deps',
+      automerge: true,
+    },
+    {
+      description: 'Shipped in the image -> patch release',
+      matchManagers: ['npm'],
+      matchDepTypes: ['dependencies', 'pnpm-workspace.overrides'],
+      semanticCommitType: 'fix',
+      semanticCommitScope: 'deps',
+    },
+    {
+      description: 'Runtime dependencies: patch/minor grouped and automerged after tests',
+      matchManagers: ['npm'],
+      matchDepTypes: ['dependencies'],
+      matchUpdateTypes: ['minor', 'patch'],
+      groupName: 'runtime dependencies (non-major)',
+      groupSlug: 'runtime-non-major',
+      automerge: true,
+    },
+    {
+      description: 'Build and test tooling only -> no release',
+      matchManagers: ['npm'],
+      matchDepTypes: ['devDependencies'],
+      semanticCommitType: 'chore',
+      semanticCommitScope: 'deps',
+    },
+    {
+      description: 'Tooling: patch/minor grouped and automerged after tests',
+      matchManagers: ['npm'],
+      matchDepTypes: ['devDependencies'],
+      matchUpdateTypes: ['minor', 'patch'],
+      groupName: 'dev dependencies (non-major)',
+      groupSlug: 'dev-non-major',
+      automerge: true,
+    },
+    {
+      description: 'Types must match the Node major the image runs on',
+      matchPackageNames: ['@types/node'],
+      allowedVersions: '<27',
+    },
+    {
+      description: 'Minimum Node versions are the Broccoli2Shell floor - maintained by hand',
+      matchManagers: ['npm'],
+      matchDepTypes: ['engines'],
+      enabled: false,
+    },
+    {
+      description: 'pnpm (packageManager field + Dockerfile ARG) always moves together',
+      matchPackageNames: ['pnpm'],
+      groupName: 'pnpm',
+      groupSlug: 'pnpm',
+      semanticCommitType: 'chore',
+      semanticCommitScope: 'deps',
+      automerge: true,
+      matchUpdateTypes: ['minor', 'patch'],
+    },
+    {
+      description: 'Node base image: new LTS majors need review, they change the runtime',
+      matchDatasources: ['docker'],
+      matchPackageNames: ['node'],
+      semanticCommitType: 'fix',
+      semanticCommitScope: 'deps',
+      automerge: false,
+    },
+    {
+      description: 'Majors always need a human',
+      matchUpdateTypes: ['major'],
+      matchManagers: ['npm', 'dockerfile'],
+      automerge: false,
+      dependencyDashboardApproval: false,
+    },
+  ],
+
+  customManagers: [
+    {
+      description: 'pnpm version used inside the Docker build',
+      customType: 'regex',
+      managerFilePatterns: ['/(^|/)Dockerfile$/'],
+      matchStrings: ['ARG PNPM_VERSION=(?<currentValue>\\d+\\.\\d+\\.\\d+)'],
+      depNameTemplate: 'pnpm',
+      datasourceTemplate: 'npm',
+    },
+  ],
+
+  lockFileMaintenance: {
+    enabled: true,
+    schedule: ['before 6am on the first day of the month'],
+    semanticCommitType: 'chore',
+    semanticCommitScope: 'deps',
+    automerge: true,
+  },
+
+  vulnerabilityAlerts: {
+    labels: ['security'],
+    semanticCommitType: 'fix',
+    semanticCommitScope: 'deps',
+    // security fixes skip the waiting period
+    minimumReleaseAge: null,
+    schedule: ['at any time'],
+  },
+}

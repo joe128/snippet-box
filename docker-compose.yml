@@ -1,10 +1,35 @@
-version: '3'
+name: snippet-box
+
 services:
   snippet-box:
-    image: pawelmalak/snippet-box
+    build: .
+    image: snippet-box:2
     container_name: snippet-box
     volumes:
-      - /path/to/host/data:/app/data
+      # Named volume: Docker creates it owned by the container user, so this works
+      # with rootful and rootless Docker without any chown.
+      - snippet-box-data:/app/data
+      #
+      # Prefer a host folder? Replace the line above with:
+      #   - ./data:/app/data
+      # and make it writable for the container user (uid 1000 *inside* the container):
+      #   rootful Docker:  sudo chown -R 1000:1000 ./data
+      #   rootless Docker: docker run --rm -v ./data:/data alpine chown -R 1000:1000 /data
+      #   (on the host the files then belong to one of your subuids, e.g. 100999)
     ports:
-      - 5000:5000
+      - 127.0.0.1:5000:5000
+    environment:
+      # Set to enable HTTP Basic auth
+      - AUTH_PASSWORD=
+      - AUTH_USER=admin
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     restart: unless-stopped
+
+volumes:
+  snippet-box-data:

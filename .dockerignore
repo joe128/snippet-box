@@ -1,2 +1,8 @@
-node_modules/
-build/
+node_modules
+**/node_modules
+build
+client/build
+public
+data
+.git
+.github

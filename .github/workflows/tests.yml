@@ -1,0 +1,89 @@
+name: Tests
+
+# Runs on every pull request (Renovate automerges only when this passes)
+# and is reused by release.yml before anything gets released.
+on:
+  pull_request:
+  workflow_call:
+    inputs:
+      no-cache:
+        description: 'Rebuild without layer cache (security rebuilds)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    # cancel outdated PR runs; release runs get a unique group and are never cancelled
+    concurrency:
+      group: tests-${{ github.event.pull_request.number || github.run_id }}
+      cancel-in-progress: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      # Same Alpine + Node as production, with dev dependencies and the test files
+      - name: Build local Alpine Image for Testing
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          target: test
+          push: false
+          load: true
+          tags: app-test-env:local
+          no-cache: ${{ inputs.no-cache }}
+
+      - name: Run tests inside the Alpine Container
+        run: docker run --rm app-test-env:local pnpm test
+
+      - name: Audit production dependencies
+        run: docker run --rm app-test-env:local pnpm audit --prod --audit-level high
+
+      - name: Build production image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          target: runtime
+          push: false
+          load: true
+          tags: app-runtime:local
+          no-cache: ${{ inputs.no-cache }}
+
+      # The server refuses to start on a Node version vulnerable to Broccoli2Shell,
+      # so a healthy container also proves the base image is patched
+      - name: Smoke test production image
+        run: |
+          docker run -d --name smoke -p 5000:5000 app-runtime:local
+          for _ in $(seq 30); do
+            STATUS=$(docker inspect -f '{{.State.Health.Status}}' smoke 2>/dev/null || echo missing)
+            [ "$STATUS" = "healthy" ] && break
+            [ "$(docker inspect -f '{{.State.Running}}' smoke)" = "false" ] && break
+            sleep 2
+          done
+          docker logs smoke
+          docker exec smoke node -e "console.log('Node', process.versions.node)"
+          test "$(docker inspect -f '{{.State.Health.Status}}' smoke)" = "healthy"
+
+          curl -fsS http://127.0.0.1:5000/ | grep -q '<title>Snippet Box</title>'
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' \
+            -H 'Content-Encoding: br' --data-binary '{}' http://127.0.0.1:5000/api/snippets)
+          test "$CODE" = "415"
+          docker rm -f smoke
+
+      - name: Scan production image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: app-runtime:local
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'

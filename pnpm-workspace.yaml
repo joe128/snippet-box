@@ -1,0 +1,11 @@
+packages:
+  - client
+
+allowBuilds:
+  sqlite3: true
+  # only verifies its platform binary (via tsx) - not needed
+  esbuild: false
+
+overrides:
+  # GHSA-w5hq-g745-h8pq (pulled in by sequelize)
+  uuid: ^11.1.1

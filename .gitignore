@@ -1,4 +1,6 @@
-node_modules/
-build/
-data/*
-!data/**/*.json
+node_modules
+build
+data
+public
+*.tsbuildinfo
+THIRD_PARTY_NOTICES.txt

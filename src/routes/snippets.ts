@@ -7,23 +7,27 @@ import {
   getRawCode,
   getSnippet,
   searchSnippets,
+  setPinned,
   updateSnippet
 } from '../controllers/snippets';
-import { requireBody } from '../middleware';
+import { validateBody, validateId } from '../middleware';
+import { pinSchema, searchSchema, snippetSchema } from '../utils';
 
 export const snippetRouter = Router();
 
 snippetRouter
-  .route('/')
-  .post(requireBody('title', 'language', 'code'), createSnippet)
+  .route('/snippets')
+  .post(validateBody(snippetSchema), createSnippet)
   .get(getAllSnippets);
 
-snippetRouter
-  .route('/:id')
-  .get(getSnippet)
-  .put(updateSnippet)
-  .delete(deleteSnippet);
+snippetRouter.get('/snippets/statistics/count', countTags);
+snippetRouter.get('/snippets/raw/:id', validateId, getRawCode);
+snippetRouter.post('/snippets/search', validateBody(searchSchema), searchSnippets);
+snippetRouter.patch('/snippets/:id/pin', validateId, validateBody(pinSchema), setPinned);
 
-snippetRouter.route('/statistics/count').get(countTags);
-snippetRouter.route('/raw/:id').get(getRawCode);
-snippetRouter.route('/search').post(searchSnippets);
+snippetRouter
+  .route('/snippets/:id')
+  .all(validateId)
+  .get(getSnippet)
+  .put(validateBody(snippetSchema), updateSnippet)
+  .delete(deleteSnippet);

@@ -1,10 +1,53 @@
 import { Request, Response, NextFunction } from 'express';
-import { QueryTypes, Op } from 'sequelize';
+import { QueryTypes, Op, WhereOptions } from 'sequelize';
 import { sequelize } from '../db';
 import { asyncWrapper } from '../middleware';
-import { SnippetModel, Snippet_TagModel, TagModel } from '../models';
-import { ErrorResponse, tagParser, Logger, createTags } from '../utils';
-import { Body, SearchQuery } from '../typescript/interfaces';
+import {
+  SnippetInstance,
+  SnippetModel,
+  Snippet_TagModel,
+  TagModel
+} from '../models';
+import {
+  ErrorResponse,
+  tagParser,
+  createTags,
+  SnippetBody,
+  SearchBody
+} from '../utils';
+
+const withTags = {
+  model: TagModel,
+  as: 'tags',
+  attributes: ['name'],
+  through: {
+    attributes: []
+  }
+};
+
+const notFound = (id: string) =>
+  new ErrorResponse(404, `Snippet with id of ${id} was not found`);
+
+/** Only whitelisted, validated fields ever reach the model (no mass assignment) */
+const toAttributes = (body: SnippetBody) => ({
+  title: body.title,
+  description: body.description,
+  language: body.language,
+  code: body.code,
+  docs: body.docs,
+  isPinned: body.isPinned ? 1 : 0
+});
+
+const serialize = (snippet: SnippetInstance) => {
+  const raw = snippet.get({ plain: true });
+
+  return {
+    ...raw,
+    isPinned: !!raw.isPinned,
+    tags: raw.tags?.map(tag => tag.name) ?? []
+  };
+};
+
 
 /**
  * @description Create new snippet
@@ -13,29 +56,20 @@ import { Body, SearchQuery } from '../typescript/interfaces';
  */
 export const createSnippet = asyncWrapper(
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    // Get tags from request body
-    const { language, tags: requestTags } = <Body>req.body;
-    const parsedRequestTags = tagParser([
-      ...requestTags,
-      language.toLowerCase()
-    ]);
+    const body = <SnippetBody>req.body;
+    const parsedTags = tagParser([...body.tags, body.language.toLowerCase()]);
 
-    // Create snippet
-    const snippet = await SnippetModel.create({
-      ...req.body,
-      tags: [...parsedRequestTags].join(',')
+    const snippet = await sequelize.transaction(async () => {
+      const snippet = await SnippetModel.create(toAttributes(body));
+      await createTags(parsedTags, snippet.id);
+      return snippet;
     });
-
-    // Create tags
-    await createTags(parsedRequestTags, snippet.id);
-
-    // Get raw snippet values
-    const rawSnippet = snippet.get({ plain: true });
 
     res.status(201).json({
       data: {
-        ...rawSnippet,
-        tags: [...parsedRequestTags]
+        ...snippet.get({ plain: true }),
+        isPinned: body.isPinned,
+        tags: [...parsedTags]
       }
     });
   }
@@ -49,27 +83,12 @@ export const createSnippet = asyncWrapper(
 export const getAllSnippets = asyncWrapper(
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const snippets = await SnippetModel.findAll({
-      include: {
-        model: TagModel,
-        as: 'tags',
-        attributes: ['name'],
-        through: {
-          attributes: []
-        }
-      }
-    });
-
-    const populatedSnippets = snippets.map(snippet => {
-      const rawSnippet = snippet.get({ plain: true });
-
-      return {
-        ...rawSnippet,
-        tags: rawSnippet.tags?.map(tag => tag.name)
-      };
+      include: withTags,
+      order: [['updatedAt', 'DESC']]
     });
 
     res.status(200).json({
-      data: populatedSnippets
+      data: snippets.map(serialize)
     });
   }
 );
@@ -81,35 +100,16 @@ export const getAllSnippets = asyncWrapper(
  */
 export const getSnippet = asyncWrapper(
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    const snippet = await SnippetModel.findOne({
-      where: { id: req.params.id },
-      include: {
-        model: TagModel,
-        as: 'tags',
-        attributes: ['name'],
-        through: {
-          attributes: []
-        }
-      }
+    const snippet = await SnippetModel.findByPk(String(req.params.id), {
+      include: withTags
     });
 
     if (!snippet) {
-      return next(
-        new ErrorResponse(
-          404,
-          `Snippet with id of ${req.params.id} was not found`
-        )
-      );
+      return next(notFound(String(req.params.id)));
     }
 
-    const rawSnippet = snippet.get({ plain: true });
-    const populatedSnippet = {
-      ...rawSnippet,
-      tags: rawSnippet.tags?.map(tag => tag.name)
-    };
-
     res.status(200).json({
-      data: populatedSnippet
+      data: serialize(snippet)
     });
   }
 );
@@ -121,41 +121,50 @@ export const getSnippet = asyncWrapper(
  */
 export const updateSnippet = asyncWrapper(
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    let snippet = await SnippetModel.findOne({
-      where: { id: req.params.id }
-    });
+    const snippet = await SnippetModel.findByPk(String(req.params.id));
 
     if (!snippet) {
-      return next(
-        new ErrorResponse(
-          404,
-          `Snippet with id of ${req.params.id} was not found`
-        )
-      );
+      return next(notFound(String(req.params.id)));
     }
 
-    // Get tags from request body
-    const { language, tags: requestTags } = <Body>req.body;
-    let parsedRequestTags = tagParser([...requestTags, language.toLowerCase()]);
+    const body = <SnippetBody>req.body;
+    const parsedTags = tagParser([...body.tags, body.language.toLowerCase()]);
 
-    // Update snippet
-    snippet = await snippet.update({
-      ...req.body,
-      tags: [...parsedRequestTags].join(',')
+    await sequelize.transaction(async () => {
+      await snippet.update(toAttributes(body));
+      await Snippet_TagModel.destroy({ where: { snippet_id: snippet.id } });
+      await createTags(parsedTags, snippet.id);
     });
-
-    // Delete old tags and create new ones
-    await Snippet_TagModel.destroy({ where: { snippet_id: req.params.id } });
-    await createTags(parsedRequestTags, snippet.id);
-
-    // Get raw snippet values
-    const rawSnippet = snippet.get({ plain: true });
 
     res.status(200).json({
       data: {
-        ...rawSnippet,
-        tags: [...parsedRequestTags]
+        ...snippet.get({ plain: true }),
+        isPinned: body.isPinned,
+        tags: [...parsedTags]
       }
+    });
+  }
+);
+
+/**
+ * @description Pin / unpin snippet
+ * @route /api/snippets/:id/pin
+ * @request PATCH
+ */
+export const setPinned = asyncWrapper(
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const snippet = await SnippetModel.findByPk(String(req.params.id), {
+      include: withTags
+    });
+
+    if (!snippet) {
+      return next(notFound(String(req.params.id)));
+    }
+
+    await snippet.update({ isPinned: req.body.isPinned ? 1 : 0 });
+
+    res.status(200).json({
+      data: serialize(snippet)
     });
   }
 );
@@ -167,21 +176,16 @@ export const updateSnippet = asyncWrapper(
  */
 export const deleteSnippet = asyncWrapper(
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    const snippet = await SnippetModel.findOne({
-      where: { id: req.params.id }
-    });
+    const snippet = await SnippetModel.findByPk(String(req.params.id));
 
     if (!snippet) {
-      return next(
-        new ErrorResponse(
-          404,
-          `Snippet with id of ${req.params.id} was not found`
-        )
-      );
+      return next(notFound(String(req.params.id)));
     }
 
-    await Snippet_TagModel.destroy({ where: { snippet_id: req.params.id } });
-    await snippet.destroy();
+    await sequelize.transaction(async () => {
+      await Snippet_TagModel.destroy({ where: { snippet_id: snippet.id } });
+      await snippet.destroy();
+    });
 
     res.status(200).json({
       data: {}
@@ -222,21 +226,23 @@ export const countTags = asyncWrapper(
  */
 export const getRawCode = asyncWrapper(
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    const snippet = await SnippetModel.findOne({
-      where: { id: req.params.id },
-      raw: true
-    });
+    const snippet = await SnippetModel.findByPk(String(req.params.id), { raw: true });
 
     if (!snippet) {
-      return next(
-        new ErrorResponse(
-          404,
-          `Snippet with id of ${req.params.id} was not found`
-        )
-      );
+      return next(notFound(String(req.params.id)));
     }
 
-    res.status(200).send(snippet.code);
+    // res.send(string) would default to text/html -> stored XSS.
+    // Force plain text and forbid any active content.
+    res
+      .status(200)
+      .type('text/plain; charset=utf-8')
+      .set({
+        'X-Content-Type-Options': 'nosniff',
+        'Content-Security-Policy': "default-src 'none'; sandbox",
+        'Content-Disposition': 'inline'
+      })
+      .send(snippet.code);
   }
 );
 
@@ -247,9 +253,8 @@ export const getRawCode = asyncWrapper(
  */
 export const searchSnippets = asyncWrapper(
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    const { query, tags, languages } = <SearchQuery>req.body;
+    const { query, tags, languages } = <SearchBody>req.body;
 
-    // Check if query is empty
     if (query === '' && !tags.length && !languages.length) {
       res.status(200).json({
         data: []
@@ -258,41 +263,32 @@ export const searchSnippets = asyncWrapper(
       return;
     }
 
-    const languageFilter = languages.length
-      ? { [Op.in]: languages }
-      : { [Op.notIn]: languages };
+    const conditions: WhereOptions[] = [];
 
-    const tagFilter = tags.length ? { [Op.in]: tags } : { [Op.notIn]: tags };
+    if (query) {
+      conditions.push({
+        [Op.or]: [
+          { title: { [Op.substring]: query } },
+          { description: { [Op.substring]: query } },
+          { code: { [Op.substring]: query } }
+        ]
+      });
+    }
+
+    if (languages.length) {
+      conditions.push({ language: { [Op.in]: languages } });
+    }
 
     const snippets = await SnippetModel.findAll({
-      where: {
-        [Op.and]: [
-          {
-            [Op.or]: [
-              { title: { [Op.substring]: `${query}` } },
-              { description: { [Op.substring]: `${query}` } }
-            ]
-          },
-          {
-            language: languageFilter
-          }
-        ]
-      },
-      include: {
-        model: TagModel,
-        as: 'tags',
-        attributes: ['name'],
-        where: {
-          name: tagFilter
-        },
-        through: {
-          attributes: []
-        }
-      }
+      where: { [Op.and]: conditions },
+      include: tags.length
+        ? { ...withTags, where: { name: { [Op.in]: tags } } }
+        : withTags,
+      order: [['updatedAt', 'DESC']]
     });
 
     res.status(200).json({
-      data: snippets
+      data: snippets.map(serialize)
     });
   }
 );
