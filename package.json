@@ -34,7 +34,7 @@
     "umzug": "^2.3.0",
     "zod": "^4.6.7"
   },
-  "packageManager": "pnpm@12.16.1",
+  "packageManager": "pnpm@12.21.0",
   "author": "joe128 (fork of pawelmalak/snippet-box)",
   "repository": {
     "type": "git",

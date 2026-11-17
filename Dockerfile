@@ -1,7 +1,7 @@
 # The tag floats on purpose: a no-cache rebuild (see the weekly CI job) picks up
 # new Node security releases. The server refuses to start on an unpatched runtime.
 ARG NODE_IMAGE=node:26-alpine
-ARG PNPM_VERSION=12.16.1
+ARG PNPM_VERSION=12.21.0
 
 FROM ${NODE_IMAGE} AS base
 ARG PNPM_VERSION
