@@ -98,6 +98,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          token: ${{ secrets.PAT }}
 
       # Written to runner.temp, NOT into the repo: the changelog action commits with
       # `git add .`, so a file inside the checkout would end up in the release commit
