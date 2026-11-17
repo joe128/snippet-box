@@ -1,3 +1,14 @@
+## 2.0.0 (2026-11-17)
+
+
+### ⚠ BREAKING CHANGES
+
+* security hardening and new UI
+
+### Features
+
+* security hardening and new UI ([9a2cb7b](https://github.com/joe128/snippet-box/commit/9a2cb7b450dc46efad741fba1972ac8fcf2732ac))
+
 ### v1.4 (2021-10-14)
 - Added search functionality ([#18](https://github.com/pawelmalak/snippet-box/issues/18))
 - Fixed date parsing bug ([#22](https://github.com/pawelmalak/snippet-box/issues/22))
