@@ -1,7 +1,8 @@
 import { DataTypes, QueryInterface } from 'sequelize';
+import type { MigrationFn } from 'umzug';
 const { INTEGER, STRING, DATE, TEXT } = DataTypes;
 
-export const up = async (queryInterface: QueryInterface): Promise<void> => {
+export const up: MigrationFn<QueryInterface> = async ({ context: queryInterface }) => {
   await queryInterface.createTable('snippets', {
     id: {
       type: INTEGER,
@@ -42,6 +43,6 @@ export const up = async (queryInterface: QueryInterface): Promise<void> => {
   });
 };
 
-export const down = async (queryInterface: QueryInterface): Promise<void> => {
+export const down: MigrationFn<QueryInterface> = async ({ context: queryInterface }) => {
   await queryInterface.dropTable('snippets');
 };

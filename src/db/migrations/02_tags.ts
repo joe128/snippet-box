@@ -1,5 +1,6 @@
 import { Logger } from '../../utils';
 import { DataTypes, QueryInterface } from 'sequelize';
+import type { MigrationFn } from 'umzug';
 import {
   SnippetModel,
   Snippet_TagModel,
@@ -10,7 +11,7 @@ import {
 const { STRING, INTEGER } = DataTypes;
 const logger = new Logger('migration[02]');
 
-export const up = async (queryInterface: QueryInterface): Promise<void> => {
+export const up: MigrationFn<QueryInterface> = async ({ context: queryInterface }) => {
   await queryInterface.createTable('tags', {
     id: {
       type: INTEGER,
@@ -86,7 +87,7 @@ export const up = async (queryInterface: QueryInterface): Promise<void> => {
   }
 };
 
-export const down = async (queryInterface: QueryInterface): Promise<void> => {
+export const down: MigrationFn<QueryInterface> = async ({ context: queryInterface }) => {
   await queryInterface.dropTable('tags');
   await queryInterface.dropTable('snippets_tags');
 };
