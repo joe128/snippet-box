@@ -1,6 +1,6 @@
 {
   "name": "snippet-box",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "Self-hosted code snippet manager",
   "main": "build/server.js",
   "engines": {

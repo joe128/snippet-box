@@ -1,3 +1,10 @@
+## [2.0.2](https://github.com/joe128/snippet-box/compare/2.0.1...2.0.2) (2026-11-18)
+
+
+### Bug Fixes
+
+* **deps:** migrate to umzug v3 ([28f5580](https://github.com/joe128/snippet-box/commit/28f5580d33dff53283d8b483d601e91d27afa6cd))
+
 ## <small>2.0.1 (2026-11-17)</small>
 
 * ci: push release commit with PAT so it can bypass the main ruleset ([b3a93f9](https://github.com/joe128/snippet-box/commit/b3a93f9))
