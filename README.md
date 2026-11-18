@@ -18,7 +18,7 @@ out-of-bounds write in the Brotli decoder bundled with Node.js, plus several app
 
 | Issue | Fix |
 | --- | --- |
-| Broccoli2Shell: unpatched Node 14 runtime | Docker image pinned to `node:24.22.1-alpine`; server **refuses to start** on Node < 22.23.4 / 24.22.1 / 26.12.1 (`ALLOW_VULNERABLE_NODE=1` to override for local dev only) |
+| Broccoli2Shell: unpatched Node 14 runtime | Docker image on `node:26-alpine` (rebuilt weekly); server **refuses to start** on Node < 22.23.4 / 24.22.1 / 26.12.1 (`ALLOW_VULNERABLE_NODE=1` to override for local dev only) |
 | Broccoli2Shell: attacker-supplied compressed bodies | Every `Content-Encoding` other than identity is rejected with 415 before reaching zlib; `express.json({ inflate: false })` as second layer |
 | Stored XSS via `/api/snippets/raw/:id` (served as `text/html`) | Served as `text/plain` with `nosniff` and a sandbox CSP |
 | Mass assignment (`...req.body` into the model) | Strict zod schemas, only whitelisted fields are persisted |
@@ -97,14 +97,36 @@ sudo chown -R 1000:1000 ./data
 docker run --rm -v ./data:/data alpine chown -R 1000:1000 /data
 ```
 
+### Backup
+
+All data is the single SQLite file `db.sqlite3` in the data volume. Back it up before every
+upgrade - copy it while the container is stopped:
+
+```sh
+docker compose stop
+docker run --rm -v snippet-box_snippet-box-data:/data:ro -v ./backup:/backup alpine \
+  cp /data/db.sqlite3 /backup/db-$(date +%F).sqlite3
+docker compose start
+```
+
+To restore, stop the container and copy the file back the same way (`/backup` -> `/data`,
+then `chown 1000:1000`).
+
 ### Upgrading from v1
 
-The schema is unchanged, existing `db.sqlite3` files keep working. To move a v1 `./data`
-folder into the named volume:
+The schema is unchanged, existing `db.sqlite3` files keep working. **Downgrades are not
+supported:** on the first start this version converts the migration bookkeeping
+(`SequelizeMeta`) to the umzug v3 format, after which v1 and earlier fork releases can no
+longer open the database. Keep the [backup](#backup) until you are sure you stay on this
+version.
+
+To move a v1 `./data` folder into the named volume (the v1 folder itself stays untouched and
+serves as the backup):
 
 ```sh
 docker compose create
-docker run --rm -v ./data:/from:ro -v snippet-box_snippet-box-data:/to alpine   sh -c 'cp -a /from/. /to/ && chown -R 1000:1000 /to'
+docker run --rm -v ./data:/from:ro -v snippet-box_snippet-box-data:/to alpine \
+  sh -c 'cp -a /from/. /to/ && chown -R 1000:1000 /to'
 docker compose up -d
 ```
 

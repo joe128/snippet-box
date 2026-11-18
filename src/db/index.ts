@@ -1,7 +1,7 @@
 import path from 'path';
 import { mkdirSync } from 'fs';
 import { QueryTypes, Sequelize } from 'sequelize';
-import Umzug from 'umzug';
+import { SequelizeStorage, Umzug } from 'umzug';
 import { Logger } from '../utils/Logger';
 
 const logger = new Logger('db');
@@ -18,52 +18,64 @@ export const sequelize = new Sequelize({
   logging: false
 });
 
-// Migrations run as .ts with tsx (dev) and as .js from build/ (prod)
-const migrationExt = path.extname(__filename);
-
-// Migrations config
+// Migrations are listed explicitly instead of globbed from disk: the same
+// list works under tsx (.ts) and from build/ (.js), and the recorded names
+// carry no file extension. Loaded lazily - 02_tags imports the models,
+// which import this module.
 const umzug = new Umzug({
-  migrations: {
-    path: path.join(__dirname, './migrations'),
-    params: [sequelize.getQueryInterface()],
-    pattern: new RegExp(`^\\d+[\\w-]+\\${migrationExt}$`)
-  },
-  storage: 'sequelize',
-  storageOptions: {
-    sequelize
-  },
-  logging: false
+  migrations: async () => [
+    { name: '00_initial', ...(await import('./migrations/00_initial')) },
+    { name: '01_pinned_snippets', ...(await import('./migrations/01_pinned_snippets')) },
+    { name: '02_tags', ...(await import('./migrations/02_tags')) }
+  ],
+  context: sequelize.getQueryInterface(),
+  storage: new SequelizeStorage({ sequelize }),
+  logger: undefined
 });
 
 /**
- * umzug v2 records migrations by file name *including* the extension. A DB
- * created by the compiled server (00_initial.js) would otherwise look
- * un-migrated to the dev server (00_initial.ts) and fail with
- * "table already exists" - and vice versa.
+ * umzug v2 recorded migrations by file name *including* the extension
+ * (00_initial.js from the compiled server, 00_initial.ts from tsx). Rename
+ * those entries to the extension-less names used since umzug v3, so existing
+ * databases are not migrated a second time ("table already exists").
  */
 const normalizeExecutedMigrations = async () => {
   const qi = sequelize.getQueryInterface();
   if (!(await qi.tableExists('SequelizeMeta'))) return;
 
-  const otherExt = migrationExt === '.ts' ? '.js' : '.ts';
-  const replacements = { ext: migrationExt, pattern: `%${otherExt}` };
+  const withExt = `(name LIKE '%.js' OR name LIKE '%.ts')`;
+  const stem = 'substr(name, 1, length(name) - 3)';
+
+  const [{ legacy }] = await sequelize.query<{ legacy: number }>(
+    `SELECT COUNT(*) AS legacy FROM SequelizeMeta WHERE ${withExt}`,
+    { type: QueryTypes.SELECT }
+  );
+  if (legacy === 0) return;
+
+  logger.log(
+    'Converting migration records to the umzug v3 format - older versions (v1, fork < this release) ' +
+      'can no longer open this database afterwards. Keep a backup of db.sqlite3 if you may need to downgrade.',
+    'WARN'
+  );
 
   await sequelize.transaction(async transaction => {
-    // A migration can be recorded with both extensions (e.g. after an
-    // interrupted dev run) - drop the twin first, name is the primary key
+    // name is the primary key - drop twins before renaming:
+    // .ts next to .js (interrupted dev run), and entries already renamed
     await sequelize.query(
       `DELETE FROM SequelizeMeta
-       WHERE name LIKE :pattern
-       AND substr(name, 1, length(name) - 3) || :ext IN (SELECT name FROM SequelizeMeta)`,
-      { replacements, type: QueryTypes.DELETE, transaction }
+       WHERE name LIKE '%.ts' AND ${stem} || '.js' IN (SELECT name FROM SequelizeMeta)`,
+      { type: QueryTypes.DELETE, transaction }
+    );
+    await sequelize.query(
+      `DELETE FROM SequelizeMeta
+       WHERE ${withExt} AND ${stem} IN (SELECT name FROM SequelizeMeta)`,
+      { type: QueryTypes.DELETE, transaction }
     );
 
-    await sequelize.query(
-      `UPDATE SequelizeMeta
-       SET name = substr(name, 1, length(name) - 3) || :ext
-       WHERE name LIKE :pattern`,
-      { replacements, type: QueryTypes.UPDATE, transaction }
-    );
+    await sequelize.query(`UPDATE SequelizeMeta SET name = ${stem} WHERE ${withExt}`, {
+      type: QueryTypes.UPDATE,
+      transaction
+    });
   });
 };
 
@@ -107,8 +119,8 @@ export const connectDB = async () => {
       logger.log(`Found pending migrations. Executing...`);
 
       if (isDev) {
-        pendingMigrations.forEach(({ file }: { file: string }) =>
-          logger.log(`Executing ${file} migration`, 'DEV')
+        pendingMigrations.forEach(({ name }) =>
+          logger.log(`Executing ${name} migration`, 'DEV')
         );
       }
     }

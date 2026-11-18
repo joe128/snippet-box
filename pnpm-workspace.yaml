@@ -12,8 +12,8 @@ overrides:
 
 auditConfig:
   ignoreGhsas:
-    # picomatch ReDoS, no patched release yet. Only reached via
-    # sqlite3 > node-gyp (optional, build-time fallback for compiling the
-    # native binding); the app never passes user input to glob matching.
+    # picomatch ReDoS, no patched release yet. Pulled in via
+    # sqlite3 > node-gyp (build-time fallback) and umzug > tinyglobby; the app
+    # lists its migrations explicitly and never passes input to glob matching.
     # Remove once picomatch ships a fix.
     - GHSA-fc5q-39xc-vjpf

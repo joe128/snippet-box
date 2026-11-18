@@ -8,6 +8,10 @@ ARG PNPM_VERSION
 # Toolchain for sqlite3 in case no prebuilt binary matches (e.g. ARM/musl)
 RUN apk add --no-cache python3 make g++ \
     && npm install -g pnpm@${PNPM_VERSION}
+# Compile against the headers shipped in the image instead of downloading them
+# from nodejs.org - the source build then also works behind proxies/firewalls
+# and when nodejs.org is slow (node-gyp ETIMEDOUT)
+ENV npm_config_nodedir=/usr/local
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY client/package.json ./client/
