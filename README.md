@@ -1,5 +1,9 @@
 # Snippet Box
 
+[![Docker Image Version](https://img.shields.io/docker/v/joeu128/snippet-box?sort=semver&label=docker)](https://hub.docker.com/r/joeu128/snippet-box/tags)
+[![Docker Image Size](https://img.shields.io/docker/image-size/joeu128/snippet-box?sort=semver)](https://hub.docker.com/r/joeu128/snippet-box)
+[![Release](https://github.com/joe128/snippet-box/actions/workflows/release.yml/badge.svg)](https://github.com/joe128/snippet-box/actions/workflows/release.yml)
+
 > **Fork notice:** This is a security-hardened and modernized fork of
 > [pawelmalak/snippet-box](https://github.com/pawelmalak/snippet-box) by Paweł Malak,
 > maintained by [joe128](https://github.com/joe128). It is not affiliated with or endorsed by
@@ -59,7 +63,7 @@ migrations and the security fixes (compressed bodies, raw-endpoint XSS, validati
 2. **Tests** (`tests.yml`, also runs on every pull request) - builds the `test` Docker stage (same Alpine + Node as production) and runs
    `pnpm test` and `pnpm audit` inside it, then builds the production image, checks that it
    becomes healthy, rejects Brotli bodies and passes a Trivy scan.
-3. **Release** - conventional-commit changelog and version tag.
+3. **Release** - conventional-commit changelog and version tag (`feat:` -> minor, `fix:` -> patch).
 4. **Publish** - pushes `<version>` and `latest` to Docker Hub.
 
 ### Dependency updates
@@ -75,6 +79,8 @@ non-major updates once the **Tests** workflow is green. The commit type decides 
 
 Major updates and new Node LTS versions always need a manual merge.
 
+Required repository secrets: `DOCKER_USERNAME`, `DOCKER_SECRET` (Docker Hub access token) and
+`PAT` (token with `contents: write`, so the release commit can be pushed).
 
 ## Installation
 
