@@ -1,3 +1,10 @@
+## [2.0.3](https://github.com/joe128/snippet-box/compare/2.0.2...2.0.3) (2026-11-20)
+
+
+### Bug Fixes
+
+* **deps:** update dependency lucide-react to v1.74.0 ([#11](https://github.com/joe128/snippet-box/issues/11)) ([575182d](https://github.com/joe128/snippet-box/commit/575182dc418115dc6a9af1ed70334256c9821465))
+
 ## [2.0.2](https://github.com/joe128/snippet-box/compare/2.0.1...2.0.2) (2026-11-18)
 
 
